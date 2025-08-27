@@ -1,31 +1,44 @@
-from django.http import JsonResponse
+
 import os
+import json
+import uuid
 import hashlib
+
+
+from django.http import JsonResponse
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import User, Role
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from rest_framework_simplejwt.tokens import RefreshToken
 
+
+import razorpay
+from decouple import config
+
+
+from api.models import User, Role, ServiceRequest, PaymentTransaction
+from api.constants import SERVICE_FEES
+
+
+@api_view(['GET'])
 def health(request):
     return JsonResponse({"status": "ok"})
+
 
 @api_view(['POST'])
 def signup(request):
     data = request.data
     required_fields = ['name', 'email', 'mobile', 'password']
-    
-    # Validate presence
+
     for field in required_fields:
         if not data.get(field):
             return Response({'detail': f'{field} is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Validate password length
     if len(data['password']) < 8:
         return Response({'detail': 'Password must be at least 8 characters'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check email uniqueness
     if User.objects.filter(Email=data['email']).exists():
         return Response({'detail': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -54,12 +67,6 @@ def signup(request):
     except Exception as e:
         return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-import hashlib
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-from api.models import User
 
 @api_view(['POST'])
 def login(request):
@@ -93,23 +100,9 @@ def login(request):
 
     except User.DoesNotExist:
         return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-from api.constants import SERVICE_FEES
 
-def create_service_request(request):
-    data = json.loads(request.body)
-    service_type = data.get("ServiceType")
-    fee_amount = float(data.get("FeeAmount"))
 
-    expected_fee = SERVICE_FEES.get(service_type)
-    if expected_fee is None:
-        return JsonResponse({"error": "Invalid service type"}, status=400)
-
-    if fee_amount != expected_fee:
-        return JsonResponse({"error": "Fee tampering detected"}, status=403)
-
-from django.http import JsonResponse
-from decouple import config
-
+@api_view(['GET'])
 def payment_health(request):
     try:
         key_id = config("RAZORPAY_KEY_ID")
@@ -123,15 +116,7 @@ def payment_health(request):
 
     except Exception as e:
         return JsonResponse({"status": "Error", "detail": str(e)}, status=500)
-import json
-import uuid
-import razorpay
-from decouple import config
-from django.views.decorators.csrf import csrf_exempt
-from api.models import ServiceRequest, PaymentTransaction
-from api.constants import SERVICE_FEES
-from django.utils.decorators import method_decorator
-from django.http import JsonResponse
+
 
 @api_view(['POST'])
 def create_order(request):
@@ -145,7 +130,6 @@ def create_order(request):
         if expected_fee != fee_amount:
             return JsonResponse({"error": "Fee mismatch"}, status=403)
 
-        # Simulate authenticated user (replace with actual auth in production)
         user_id = request.headers.get("X-User-ID")
         user = User.objects.get(UserID=user_id)
 
@@ -190,7 +174,6 @@ def create_service_request(request):
         if expected_fee != fee_amount:
             return JsonResponse({"error": "Fee tampering detected"}, status=403)
 
-        # Simulate authenticated user (replace with actual auth in production)
         user_id = request.headers.get("X-User-ID")
         user = User.objects.get(UserID=user_id)
 
@@ -216,9 +199,6 @@ def create_service_request(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from api.models import ServiceRequest, User
 
 @api_view(['GET'])
 def get_user_requests(request):
