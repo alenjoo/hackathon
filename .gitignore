@@ -1,0 +1,20 @@
+# Node modules and Python artifacts
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+.env
+.env.local
+.DS_Store
+
+# Django static/media
+staticfiles/
+media/
+
+# VSCode and OS files
+
+.vscode/
+*.log
+/venv
